@@ -1,0 +1,9 @@
+[Match]
+Name=wan
+
+[Network]
+DHCP=ipv4
+
+[DHCPv4]
+UseDNS=yes
+RouteMetric=100
