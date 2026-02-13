@@ -72,14 +72,13 @@ if [[ -z "${kernelfile}" ]];then
 else
 	kernel=$(echo ${kernelfile}|sed -e 's/^.*_\(.*\).tar.gz/\1/')
 fi
-newimgfile=${variant:-$board}_${distro}_${kernel}_${device}.img.gz
+newimgfile=${variant:-$board}_${distro}_${kernel}_${device}.img
 
-cp $imgfile $newimgfile
 echo "unpack imgfile ($newimgfile)..."
-gunzip $newimgfile
+gunzip -c $imgfile > $newimgfile
 echo "setting up imgfile to loopdev..."
-sudo losetup ${LDEV} ${newimgfile%.*} 1> /dev/null
-if [[ $? -ne 0 ]];then echo "losetup ${LDEV} failed (${newimgfile%.*})"; exit 1; fi
+sudo losetup ${LDEV} ${newimgfile} 1> /dev/null
+if [[ $? -ne 0 ]];then echo "losetup ${LDEV} failed (${newimgfile})"; exit 1; fi
 echo "mounting loopdev..."
 sudo partprobe ${LDEV}
 if [[ $? -ne 0 ]];then echo "partprobe failed"; exit 1; fi
@@ -149,7 +148,7 @@ if [[ ${board} != "bpi-r2pro" ]];then
 	sudo chroot $targetdir bash -c "apt install --no-install-recommends -y hostapd iw xz-utils"
 fi
 
-sudo chroot $targetdir bash -c "apt update; apt install --no-install-recommends -y nftables ${additional_pkgs}"
+sudo chroot $targetdir bash -c "apt update; apt install --no-install-recommends -y nftables libnetfilter-queue1 wireguard-tools ${additional_pkgs}"
 
 sudo cp -r conf/generic/* ${targetdir}/
 if [[ -e conf/$board ]];then
@@ -159,6 +158,17 @@ if [[ -e conf/$board ]];then
 	for d in bin lib sbin;do
 		if [[ -d conf/${board}/$d ]];then
 			sudo cp -r conf/${board}/$d/* ${targetdir}/$d/
+		fi
+	done
+fi
+#apply variant-specific config overlay (e.g. bpi-r4pro)
+if [[ -n "$variant" ]] && [[ "$variant" != "$board" ]] && [[ -e conf/$variant ]];then
+	echo "applying variant overlay conf/${variant}..."
+	sudo rsync -av --partial --progress --exclude={'bin','lib','sbin'} conf/${variant}/. ${targetdir}/
+
+	for d in bin lib sbin;do
+		if [[ -d conf/${variant}/$d ]];then
+			sudo cp -r conf/${variant}/$d/* ${targetdir}/$d/
 		fi
 	done
 fi
@@ -261,10 +271,9 @@ sudo chroot $targetdir bash -c "apt install -y systemd-resolved;systemctl enable
 
 cleanup ${LDEV}
 
-echo "packing ${newimgfile}"
-gzip ${newimgfile%.*}
+echo "creating checksum for ${newimgfile}"
 md5sum ${newimgfile} > ${newimgfile}.md5
 echo "install it this way:"
-echo "gunzip -c ${newimgfile} | sudo dd bs=1M status=progress conv=notrunc,fsync of=/dev/sdX"
+echo "sudo dd if=${newimgfile} of=/dev/sdX bs=1M status=progress conv=notrunc,fsync"
 
 rm $imgfile
