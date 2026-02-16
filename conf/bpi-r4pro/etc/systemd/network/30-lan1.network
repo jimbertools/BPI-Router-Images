@@ -2,5 +2,4 @@
 Name=lan1
 
 [Network]
-Address=192.0.2.1/24
 IPForward=yes
