@@ -1,5 +1,5 @@
 [Match]
-Name=lan1
+Name=lanport2
 
 [Network]
 IPForward=yes

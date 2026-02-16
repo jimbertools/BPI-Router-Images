@@ -1,0 +1,5 @@
+[Match]
+Name=lanport6
+
+[Network]
+IPForward=yes

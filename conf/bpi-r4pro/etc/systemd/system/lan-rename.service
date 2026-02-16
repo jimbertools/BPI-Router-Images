@@ -1,14 +1,22 @@
 [Unit]
-Description=Rename LAN ports to match casing labels (lan1-lan4)
+Description=Rename LAN ports to match casing labels
 DefaultDependencies=no
 Before=systemd-networkd.service network-pre.target
-After=sys-subsystem-net-devices-lan0.device sys-subsystem-net-devices-lan1.device sys-subsystem-net-devices-lan2.device sys-subsystem-net-devices-lan3.device
+After=sys-subsystem-net-devices-lan0.device sys-subsystem-net-devices-lan1.device sys-subsystem-net-devices-lan2.device sys-subsystem-net-devices-lan3.device sys-subsystem-net-devices-lan4.device sys-subsystem-net-devices-mgmt.device
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# No collision risk: target names (lanport*) don't exist yet
 # Rename in reverse order to avoid name collisions
-ExecStart=/bin/sh -c 'ip link set lan3 name lan4; ip link set lan2 name lan3; ip link set lan1 name lan2; ip link set lan0 name lan1'
+ExecStart=/bin/sh -c '\
+  ip link set lan4 name lanport6; \
+  ip link set lan3 name lanport4; \
+  ip link set lan2 name lanport3; \
+  ip link set lan1 name lanport2; \
+  ip link set lan0 name lanport1; \
+  ip link set mgmt name lanport5 \
+'
 
 [Install]
 WantedBy=sysinit.target
