@@ -142,6 +142,28 @@ EOF
 
 echo $board | sudo tee $targetdir/etc/hostname
 
+
+# --- QEMU workarounds: prevent py3compile deadlocks + speed up dpkg ---
+# force-unsafe-io: skip fsync in dpkg (massive speedup under QEMU emulation)
+echo 'force-unsafe-io' | sudo tee $targetdir/etc/dpkg/dpkg.cfg.d/force-unsafe-io >/dev/null
+# Disable py3compile: forks workers that deadlock under QEMU user-mode
+if [ -f "$targetdir/usr/bin/py3compile" ]; then
+    sudo mv $targetdir/usr/bin/py3compile $targetdir/usr/bin/py3compile.real
+    echo '#!/bin/sh' | sudo tee $targetdir/usr/bin/py3compile >/dev/null
+    echo 'exit 0' | sudo tee -a $targetdir/usr/bin/py3compile >/dev/null
+    sudo chmod +x $targetdir/usr/bin/py3compile
+fi
+if [ -f "$targetdir/usr/bin/py3clean" ]; then
+    sudo mv $targetdir/usr/bin/py3clean $targetdir/usr/bin/py3clean.real
+    echo '#!/bin/sh' | sudo tee $targetdir/usr/bin/py3clean >/dev/null
+    echo 'exit 0' | sudo tee -a $targetdir/usr/bin/py3clean >/dev/null
+    sudo chmod +x $targetdir/usr/bin/py3clean
+fi
+# Prevent services from starting during package install
+sudo mkdir -p $targetdir/usr/sbin
+echo '#!/bin/sh' | sudo tee $targetdir/usr/sbin/policy-rc.d >/dev/null
+echo 'exit 101' | sudo tee -a $targetdir/usr/sbin/policy-rc.d >/dev/null
+sudo chmod +x $targetdir/usr/sbin/policy-rc.d
 sudo chroot $targetdir bash -c "apt update; DEBIAN_FRONTEND=noninteractive apt upgrade -y; apt clean"
 
 if [[ ${board} != "bpi-r2pro" ]];then
@@ -275,6 +297,16 @@ fi
 #install/start resolved after all is done (resolving is broken in chroot after that)
 sudo chroot $targetdir bash -c "apt install -y systemd-resolved;systemctl enable systemd-resolved"
 
+
+# --- Restore py3compile/py3clean and remove QEMU workarounds ---
+if [ -f "$targetdir/usr/bin/py3compile.real" ]; then
+    sudo mv $targetdir/usr/bin/py3compile.real $targetdir/usr/bin/py3compile
+fi
+if [ -f "$targetdir/usr/bin/py3clean.real" ]; then
+    sudo mv $targetdir/usr/bin/py3clean.real $targetdir/usr/bin/py3clean
+fi
+sudo rm -f $targetdir/etc/dpkg/dpkg.cfg.d/force-unsafe-io
+sudo rm -f $targetdir/usr/sbin/policy-rc.d
 cleanup ${LDEV}
 
 echo "creating checksum for ${newimgfile}"
